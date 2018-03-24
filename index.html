@@ -1,0 +1,1225 @@
+ <!DOCTYPE html>
+ <!--
+ author: Willie Lawrence
+ contact: cptx032 arroba gmail dot com
+-->
+	<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Made of Light</title>
+		<!--<meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, target-densitydpi=device-dpi" />-->
+		<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport" />
+		<meta name="viewport" content="width=device-width" />
+		<link href="css/toggle-checkbox.css" rel="stylesheet" type="text/css" />
+		<style>
+
+		.sub-title {
+	font-size: 40px;
+}
+a.sub-title{
+	text-decoration: none;
+	color: #333;
+	transition: color 0.5s;
+}
+a.sub-title:hover {
+	color: black;
+	opacity: 1.0;
+}
+@font-face {
+	font-family: Aliquam;
+	src: url('fonts/Aliquam.ttf');
+}
+* {
+	margin: 0px;
+	padding: 0px;
+}
+body {
+	background-color: #ffffff;
+	overflow: hidden;
+	/*
+	disabling selection, because touch
+	may trigger the selection
+	*/
+	-moz-user-select: none;
+	-webkit-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+	-o-user-select: none;
+}
+#debug {
+	position: absolute;
+	top: 0px;
+	right: 0px;
+	z-index: 100;
+	font-family: monospace;
+	margin: 15px;
+	text-align: right;
+}
+.title-div {
+	position: absolute;
+	right: 0px;
+	margin: auto;
+	left: 0px;
+	top: 0px;
+	bottom: 0px;
+	z-index: 100;
+	font-family: Aliquam;
+	font-size: 60px;
+	width: 100wh;
+	text-align: center;
+	margin-top: 40vh;
+	opacity: 0.5;
+	color: #000000;
+}
+
+		</style>
+		<script src="js/three.js"></script>
+		<script src="js/stats.min.js"></script>
+		<script src="js/joystick.js"></script>
+		<script>
+
+		// init functions
+		Array.prototype.choice = function()
+{
+	return this[Math.floor(Math.random()*this.length)];
+};
+
+function is_touch_supported()
+{
+	var msTouchEnabled = window.navigator.msMaxTouchPoints;
+	var generalTouchEnabled = 'ontouchstart' in document.createElement('div');
+ 
+	if (msTouchEnabled || generalTouchEnabled) {
+		return true;
+	}
+	return false;
+}
+
+function lerp( a, b, x )
+{
+	return a + ( (b - a) * x );
+}
+
+function resize_canvas(canvas)
+{
+	var gameWidth = window.innerWidth;
+	var gameHeight = window.innerHeight;
+	var scaleToFitX = gameWidth / GAME_WIDTH;
+	var scaleToFitY = gameHeight / GAME_HEIGHT;
+	var currentScreenRatio = gameWidth / gameHeight;
+	var optimalRatio = Math.min(scaleToFitX, scaleToFitY);
+	canvas.style.width = GAME_WIDTH * optimalRatio + "px";
+	canvas.style.height = GAME_HEIGHT * optimalRatio + "px";
+}
+
+function request_full_screen( element )
+{
+	if(element.requestFullscreen)
+	{
+		element.requestFullscreen();
+	}
+	else if(element.mozRequestFullScreen)
+	{
+		element.mozRequestFullScreen();
+	}
+	else if(element.webkitRequestFullscreen)
+	{
+		element.webkitRequestFullscreen();
+	}
+	else if(element.msRequestFullscreen)
+	{
+		element.msRequestFullscreen();
+	}
+}var COLORS = [
+	0x1abc9c, 0x2ecc71, 0x3498db,
+	0x9b59b6, 0x34495e, 0x16a085,
+	0x27ae60, 0x2980b9, 0x8e44ad,
+	0x2c3e50, 0xf1c40f, 0xe67e22,
+	0xbdc3c7, 0x7f8c8d, 0xd33257,
+	0xf39c12, 0xd35400, 0xc0392b,
+	0xe74c3c, 0x95a5a6
+];var __DICT = {
+	'pt' : {
+		'level_01_title' : 'A fenda Phrixus'
+	},
+	'en' : {
+		'level_01_title' : 'Phrixus Gap'
+	}
+};
+/////////////////////////////////////////////////
+function get_language()
+{
+	if ( localStorage.language == null )
+	{
+		set_language( 'en' );
+	}
+	return localStorage.language;
+}
+function set_language( language )
+{
+	localStorage.language = language;
+}
+/////////////////////////////////////////////////
+function _( key )
+{
+	return __DICT[get_language()][key];
+}
+
+		var VERTICAL = 'v';
+		var HORIZONTAL = 'h';
+		function set_level( level_index )
+		{
+			localStorage.level = level_index;
+		}
+		function get_level()
+		{
+			if ( localStorage.level == null )
+			{
+				set_level( 0 );
+			}
+			return localStorage.level;
+		}
+		/////////////////////////////////////////////////
+		///////////////// PARTICLES /////////////////
+		var PARTICLE_LIGHT = 1;
+		// a list with all particles of current scene
+		var PARTICLES = [];
+		/////////////////////////////////////////////
+		// DEBUG DOM OBJECT
+		var DEBUG_DIV;
+		// The div with level name/title
+		var LEVEL_NAME_DIV;
+		// the material of bird
+		var MATERIAL_MESH_SIDED;
+		var CUBE_MATERIAL;
+		// the geometry of a CubeRow
+		var CUBE_ROW_GEOMETRY;
+		// the length of a cube row in x axis
+		var CUBE_ROW_SIZE;
+		// the size of canvas is divided by this value
+		var SCALE = 1;
+		// the size of birds
+		var OBJECT_SCALE = 0.15;
+		// the y size of plane to bounds collision
+		var BIRD_Y_SIZE = 1.333333 * OBJECT_SCALE;
+		var BIRD_X_SIZE = 2 * OBJECT_SCALE;
+
+		var BIRD_COLOR = 0x95a5a6;
+		var CUBE_COLOR = 0x34495e;
+		var GAME_WIDTH = window.innerWidth / SCALE;
+		var GAME_HEIGHT = window.innerHeight / SCALE;
+		var KMAP = {};
+		///////////////////////////////////////////////////////
+		var LEFT_KEY = 37;
+		var UP_KEY = 38;
+		var RIGHT_KEY = 39;
+		var DOWN_KEY = 40;
+		var X_KEY = 88;
+		///////////////////////////////////////////////////////
+		var ANGLE_RANGE = Math.PI / 8.0;
+		var ASSETS_LOADED = false;
+		// the limit of bird fly
+		// this var is replaced in every level load
+		var BOUNDS_X = null;
+		var BOUNDS_Y = null;
+		// the x axis limit of a VERTICAL CubeRow
+		var VERTICAL_LIMIT = 25;
+		var scene;
+		var MAIN_BIRD;
+		// a list with all CubeRows
+		var CUBE_ROWS = [];
+		var JOYSTICK;
+
+		/*
+		change debug text (in upper right corner)
+		*/
+		function info( msg )
+		{
+			DEBUG_DIV.innerHTML = msg;
+		}
+		/*
+		fade in and out the level name
+		*/
+		function show_level_name( name )
+		{
+			LEVEL_NAME_DIV.innerHTML = name;
+			LEVEL_NAME_DIV.style.opacity = 0.8;
+			setTimeout(function(){
+				LEVEL_NAME_DIV.style.opacity = 0.0;
+			}, 5000);
+		}
+
+		/* advanced settings
+		antialiasing: true/false
+		resolution: high:1, medium: 2, ultralow: 4
+		render precision: highp", "mediump" or "lowp"
+		fog
+		*/
+		////////////////////////////////////////////////////////////
+		function get_cube( color )
+		{
+			// a new material is created because this cube
+			// is used in particles, and each particle has
+			// different level of alpha
+			return new THREE.Mesh(
+				CUBE_GEOMETRY,
+				new THREE.MeshBasicMaterial({
+					color: color, // very nice snow color!
+					wireframe: false,
+					transparent: true} ) );
+		}
+		var PARTICLE_LIGHT = 1;
+var MAX_PARTICLES = 10;
+/*
+attrs: {
+	x: <float>
+	y: <float>
+	z: <float>
+	velx: <float>
+	type: <int>
+}
+*/
+var ParticleEmitter = function( attrs )
+{
+	/*
+	fixme:
+		1. when the particle is destroyed your
+		material must be disposed
+	*/
+	// position
+	this.x = attrs.x;
+	this.y = attrs.y;
+	this.z = attrs.z;
+	this.type = attrs.type;
+
+	// velocity (always greater than 0)
+	this.velx = attrs.velx|0;
+
+	// 'particles' has 'MAX_PARTICLES' THREE.Mesh objects
+	this.particles = [];
+	var i = MAX_PARTICLES;
+	var cube;
+	while ( i-- )
+	{
+		cube = get_cube( attrs.color );
+		this.restart_position( cube );
+		cube.material.opacity = i / MAX_PARTICLES;
+		this.particles.push( cube );
+	}
+};
+ParticleEmitter.prototype.restart_position = function( cube )
+{
+	// the random factor in opengl units
+	var min = 0.3;
+	var max = min * 4;
+	cube.position.x = this.x + lerp(min, max, Math.random());
+	cube.position.y = this.y + lerp(min, max, Math.random());
+	cube.position.z = this.z + lerp(min, max, Math.random());
+};
+ParticleEmitter.prototype.add_to_scene = function( scene )
+{
+	var i = this.particles.length;
+	while ( i-- )
+	{
+		scene.add( this.particles[i] );
+	}
+};
+ParticleEmitter.prototype.is_colliding = function()
+{
+	var sizex = BIRD_X_SIZE / 2.0;
+	var sizey = BIRD_Y_SIZE / 2.0;
+	// the size of particle is '1'
+	if (!(((MAIN_BIRD.get_x() + sizex) >= (this.x - 0.5)) && ((MAIN_BIRD.get_x() - sizex) <= (this.x + 0.5))))
+	{
+		return false;
+	}
+	if (!(((MAIN_BIRD.get_y() + sizey) >= (this.y - 0.5)) && ((MAIN_BIRD.get_y() - sizey) <= (this.y + 0.5))))
+	{
+		return false;
+	}
+	return ((MAIN_BIRD.get_z() + sizex) >= (this.z - 0.5)) && ((MAIN_BIRD.get_z() - sizex) <= (this.z + 0.5));
+};
+ParticleEmitter.prototype.update = function( delta )
+{
+	var i = MAX_PARTICLES;
+	this.x += this.velx * delta;
+	if ( this.x <= -1 ) // '-1' is the size of cube
+	{
+		this.x = CUBE_ROW_SIZE;
+	}
+	while (i--)
+	{
+		var particle = this.particles[i];
+		this.restart_position( particle );
+		particle.position.x += (MAX_PARTICLES - i) * 0.3;
+
+		particle.material.opacity -= delta * 0.5;
+		if ( particle.material.opacity <= 0.0 )
+		{
+			// restart
+			particle.material.opacity = 0.8;
+			// this.restart_position( particle );
+		}
+	}
+	if (this.is_colliding())
+	{
+		this.process_colission();
+	}
+};
+ParticleEmitter.prototype.process_colission = function()
+{
+	//
+};var VERTICAL = 'v';
+var HORIZONTAL = 'h';
+var CubeRow = function( x, y, z, size_x, size_y, size_z, cube_row_type )
+{
+	/*
+	if type is 'HORIZONTAL' the offset is applied in x axis
+	else if applied in y axis
+	*/
+	this.cube_row_type = cube_row_type;
+	this.first = new THREE.Mesh( CUBE_ROW_GEOMETRY, CUBE_MATERIAL );
+	this.first.position.x = x;
+	this.first.position.y = y;
+	this.first.position.z = z;
+	this.first.scale.x = size_x;
+	this.first.scale.y = size_y;
+	this.first.scale.z = size_z;
+
+	this.second = new THREE.Mesh( CUBE_ROW_GEOMETRY, CUBE_MATERIAL );
+	this.second.position.z = z;
+	this.second.scale.x = size_x;
+	this.second.scale.y = size_y;
+	this.second.scale.z = size_z;
+
+	if ( this.cube_row_type == HORIZONTAL )
+	{
+		this.second.position.y = this.first.position.y;
+		this.second.position.x = this.first.position.x + CUBE_ROW_SIZE;
+	}
+	else if ( this.cube_row_type == VERTICAL )
+	{
+		this.first.position.y = 0;
+		this.second.position.y = -CUBE_ROW_SIZE;
+		this.second.position.x = this.first.position.x;
+
+		this.first.rotation.z = Math.PI / 2.0;
+		this.second.rotation.z = Math.PI / 2.0;
+	}
+	else
+	{
+		console.log( 'ERRO AO PROCESSAR TIPO DE CUBEROW' );
+	}
+
+	var nx, ny;
+	if ( this.cube_row_type == HORIZONTAL )
+	{
+		nx = this.first.scale.z * 2.0;
+		ny = this.first.scale.y * 2.0;
+	}
+	else
+	{
+		ny = this.first.scale.z * 2.0;
+		nx = this.first.scale.y * 2.0;
+	}
+	this.x_bound = nx;
+	this.y_bound = ny;
+
+	this.debug = new THREE.Mesh(
+		new THREE.PlaneBufferGeometry( nx, ny, 1 ),
+		new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe:true }));
+	if ( this.cube_row_type == VERTICAL )
+	{
+		this.debug.rotation.x = Math.PI / 2;
+	}
+	else {
+		this.debug.rotation.y = Math.PI / 2;
+	}
+};
+/*
+bird is a vector object (THREE.Vector3D)
+*/
+CubeRow.prototype.is_colliding = function()
+{
+	// the idea behind this IFs is not evaluate a group of boolean
+	// statements if just one is not true;
+	this.update_debug_object();
+	var sizex = BIRD_X_SIZE / 2.0;
+	var sizey = BIRD_Y_SIZE / 2.0;
+	if ( (MAIN_BIRD.get_z()-sizex) < (this.first.position.z+(this.x_bound/2)) )
+	{
+		if ( (MAIN_BIRD.get_z() + sizex) > (this.first.position.z-(this.x_bound/2)) )
+		{
+			if ( this.cube_row_type == VERTICAL )
+			{
+				if ( (MAIN_BIRD.get_x() + sizey) > (this.first.position.x-this.y_bound) )
+				{
+					if ( (MAIN_BIRD.get_x() - sizey) < (this.first.position.x+this.y_bound) )
+					{
+						return true;
+					}
+				}
+			}
+			else
+			{
+				if ( (MAIN_BIRD.get_y() + sizey) > (this.first.position.y-(this.y_bound/2)) )
+				{
+					if ( (MAIN_BIRD.get_y() - sizey) < (this.first.position.y+(this.y_bound/2)) )
+					{
+						return true;
+					}
+				}
+			}
+		}
+	}
+	return false;
+};
+CubeRow.prototype.update_debug_object = function()
+{
+	if ( this.cube_row_type == VERTICAL )
+	{
+		this.debug.position.x = this.first.position.x;
+		this.debug.position.z = this.first.position.z;
+		this.debug.position.y = 0;
+	}
+	else {
+		this.debug.position.x = 4;
+		this.debug.position.y = this.first.position.y;
+		this.debug.position.z = this.first.position.z;
+	}
+};
+CubeRow.prototype.add_to_scene = function( scene )
+{
+	scene.add( this.first );
+	scene.add( this.second );
+	// scene.add( this.debug );
+};
+CubeRow.prototype.increase_y = function( value )
+{
+	if ( this.cube_row_type == VERTICAL )
+	{
+		// fixme: fix to not increase 'second'
+		// but do like HORIZONTAL CubeRow
+		this.first.position.y += value;
+		this.second.position.y += value;
+
+		if ( this.first.position.y >= CUBE_ROW_SIZE )
+		{
+			this.first.position.y = -CUBE_ROW_SIZE;
+		}
+		if ( this.second.position.y >= CUBE_ROW_SIZE )
+		{
+			this.second.position.y = -CUBE_ROW_SIZE;
+		}
+	}
+};
+CubeRow.prototype.increase_x = function( value )
+{
+	this.first.position.x += value;
+
+	if ( this.first.position.x < this.second.position.x )
+	{
+		this.second.position.x = this.first.position.x + CUBE_ROW_SIZE;
+	}
+	else
+	{
+		this.second.position.x = this.first.position.x - CUBE_ROW_SIZE;
+	}
+
+	if ( this.cube_row_type == HORIZONTAL )
+	{
+		if ( this.first.position.x <= -CUBE_ROW_SIZE )
+		{
+			this.first.position.x = CUBE_ROW_SIZE;
+		}
+		if ( this.second.position.x <= -CUBE_ROW_SIZE )
+		{
+			this.second.position.x = CUBE_ROW_SIZE;
+		}
+	}
+	else if ( this.cube_row_type == VERTICAL )
+	{
+		if ( (this.first.position.x + this.first.scale.y) < 0 )
+		{
+			this.first.position.x = VERTICAL_LIMIT;
+			this.second.position.x = VERTICAL_LIMIT;
+
+			// putting it in front the main bird
+			this.first.position.z = MAIN_BIRD.left_wing.position.z;
+			this.second.position.z = MAIN_BIRD.left_wing.position.z;
+		}
+	}
+};var PLANNING = 'p';
+var FLYING = 'f';
+var SPINNING = 's';
+
+var WINGS_UP = 'u';
+var WINGS_DOWN = 'd';
+var Bird = function()
+{
+	// indicates if the bird is a robot or not,
+	// that is, if it is keyboard/touch controllable
+	this.user_controllable = true;
+	this.geometry = new THREE.Geometry();
+	this.geometry.vertices.push(
+		new THREE.Vector3( -0.2,  0, 0 ),
+		new THREE.Vector3( 0.2,  0, 0 ),
+		new THREE.Vector3( 0, 0, 1 ));
+	this.geometry.faces.push( new THREE.Face3( 1, 2, 0 ) );
+	this.geometry.computeBoundingSphere();
+	this.geometry.scale( OBJECT_SCALE, OBJECT_SCALE, OBJECT_SCALE );
+	this.right_wing = new THREE.Mesh( this.geometry, new THREE.MeshBasicMaterial({color: BIRD_COLOR, side: THREE.DoubleSide}) );
+	this.left_wing = new THREE.Mesh( this.geometry.clone(), new THREE.MeshBasicMaterial({color: BIRD_COLOR, side: THREE.DoubleSide}) );
+	this.left_wing.geometry.scale(1,1,-1);
+
+	this.debug = new THREE.Mesh(
+		new THREE.PlaneBufferGeometry( 0.3, 0.2, 1 ),
+		new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe:true }));
+	this.debug.rotation.y = Math.PI / 2.0;
+};
+Bird.prototype.set_color = function( r, g, b )
+{
+	this.left_wing.material.color = new THREE.Color( r, g, b );
+	this.right_wing.material.color = new THREE.Color( r, g, b );
+};
+Bird.prototype.update_debug_object = function()
+{
+	this.debug.position.x = this.left_wing.position.x;
+	this.debug.position.y = this.left_wing.position.y;
+	this.debug.position.z = this.left_wing.position.z;
+};
+Bird.prototype.body_x_angle = 0;
+Bird.prototype.wings_angle = 0;
+Bird.prototype.state = PLANNING;
+Bird.prototype.fly_state = WINGS_UP;
+Bird.prototype.add_to_scene = function ( scene )
+{
+	scene.add( this.left_wing );
+	scene.add( this.right_wing );
+
+	// scene.add( this.debug );
+};
+Bird.prototype.set_scale = function( value )
+{
+	this.left_wing.geometry.scale( value, value, value );
+	this.right_wing.geometry.scale( value, value, value );
+};
+Bird.prototype.get_x = function()
+{
+	return this.left_wing.position.x;
+};
+Bird.prototype.get_y = function()
+{
+	return this.left_wing.position.y;
+};
+Bird.prototype.get_z = function()
+{
+	return this.left_wing.position.z;
+};
+Bird.prototype.set_x = function( value )
+{
+	this.left_wing.position.x = value;
+	this.right_wing.position.x = value;
+};
+Bird.prototype.increase_y = function( value )
+{
+	this.left_wing.position.y += value;
+	this.right_wing.position.y += value;
+
+	if ( this.left_wing.position.y >= BOUNDS_Y )
+	{
+		this.left_wing.position.y = BOUNDS_Y;
+		this.right_wing.position.y = BOUNDS_Y;
+	}
+	else if ( this.left_wing.position.y <= -BOUNDS_Y )
+	{
+		this.left_wing.position.y = -BOUNDS_Y;
+		this.right_wing.position.y = -BOUNDS_Y;
+	}
+};
+Bird.prototype.increase_z = function( value )
+{
+	this.left_wing.position.z += value;
+	this.right_wing.position.z += value;
+
+	if ( this.left_wing.position.z >= BOUNDS_X )
+	{
+		this.left_wing.position.z = BOUNDS_X;
+		this.right_wing.position.z = BOUNDS_X;
+	}
+	else if ( this.left_wing.position.z <= -BOUNDS_X )
+	{
+		this.left_wing.position.z = -BOUNDS_X;
+		this.right_wing.position.z = -BOUNDS_X;
+	}
+};
+Bird.prototype.set_y = function( value )
+{
+	this.left_wing.position.y = value;
+	this.right_wing.position.y = value;
+};
+Bird.prototype.set_z = function( value )
+{
+	this.left_wing.position.z = value;
+	this.right_wing.position.z = value;
+};
+Bird.prototype.change_state = function()
+{
+	var old_state = this.state;
+	var joystick_active = JOYSTICK.up||JOYSTICK.down||JOYSTICK.left ||JOYSTICK.right;
+	var new_state = (KMAP[UP_KEY]||KMAP[DOWN_KEY]||KMAP[LEFT_KEY]||KMAP[RIGHT_KEY]||joystick_active) ? FLYING : PLANNING;
+	if ( KMAP[X_KEY] )
+	{
+		new_state = SPINNING;
+	}
+	// resetting the wings angle if you are switching from
+	// plane to fly
+	if ( (old_state == PLANNING) && ( new_state == FLYING ) )
+	{
+		this.wings_angle = 0;
+	}
+	this.state = new_state;
+};
+Bird.prototype.update = function( delta )
+{
+	this.update_debug_object();
+
+	this.left_wing.rotation.x = this.body_x_angle + this.wings_angle;
+	this.right_wing.rotation.x = this.body_x_angle - this.wings_angle;
+	if ( this.user_controllable )
+	{
+		this.change_state();
+	}
+	if ( this.state == PLANNING )
+	{
+		this.plane( delta );
+	}
+	else if ( this.state == FLYING )
+	{
+		this.fly( delta );
+	}
+	else if ( this.state == SPINNING )
+	{
+		this.spin( delta );
+	}
+
+	if ( this.body_x_angle >= Math.PI*2 )
+	{
+		this.body_x_angle = 0;
+	}
+};
+/*
+when x key is pressed. just sets the wings angle
+and increases the body angle
+*/
+Bird.prototype.spin = function( delta )
+{
+	this.wings_angle = 0.2;
+	this.body_x_angle += delta * 18;
+	if ( KMAP[LEFT_KEY]||JOYSTICK.left )
+	{
+		this.increase_z( -1.5 * delta );
+	}
+	if ( KMAP[RIGHT_KEY]||JOYSTICK.right )
+	{
+		this.increase_z( 1.5 * delta );
+	}
+	if ( KMAP[DOWN_KEY]||JOYSTICK.down )
+	{
+		this.increase_y( -1.5 * delta );
+	}
+	if ( KMAP[UP_KEY]||JOYSTICK.up )
+	{
+		this.increase_y( 1.5 * delta );
+	}
+};
+/*
+smoothly makes the body rotates back to 0 radians.
+this is used in flying/plane state
+*/
+Bird.prototype.fix_body_angle = function( delta )
+{
+	if ( this.body_x_angle != 0.0 )
+	{
+		// body_x_angle is negative only in left turn
+		if ( this.body_x_angle < 0 )
+		{
+			this.body_x_angle += 4 * delta;
+		}
+		else
+		{
+			if ( this.body_x_angle >= Math.PI )
+			{
+				this.body_x_angle += 4 * delta;
+			}
+			else
+			{
+				this.body_x_angle -= 4 * delta;
+			}
+		}
+	}
+	if ( (this.body_x_angle > -0.1) && (this.body_x_angle < 0.1) )
+	{
+		this.body_x_angle = 0.0;
+	}
+};
+/*
+just randomize the wings angle
+*/
+Bird.prototype.plane = function( delta )
+{
+	this.wings_angle = lerp( 0.4, 0.5, Math.random() );
+	this.fix_body_angle( delta );
+};
+Bird.prototype.fly = function( delta )
+{
+	var angle_increase;
+	if ( this.fly_state == WINGS_UP )
+	{
+		angle_increase = 5;
+		if ( this.wings_angle >= ANGLE_RANGE )
+		{
+			this.fly_state = WINGS_DOWN;
+		}
+	}
+	else
+	{
+		angle_increase = -5;
+		if ( this.wings_angle <= -ANGLE_RANGE )
+		{
+			this.fly_state = WINGS_UP;
+		}
+	}
+	this.wings_angle += angle_increase * delta;
+
+	if ( !this.user_controllable )
+	{
+		return;
+	}
+
+	if ( KMAP[LEFT_KEY]||JOYSTICK.left )
+	{
+		// angle limit
+		if ( this.body_x_angle > -0.8 )
+		{
+			this.body_x_angle -= 0.25 * delta;
+		}
+		this.increase_z( 1.5 * -delta );
+	}
+	else if ( KMAP[RIGHT_KEY]||JOYSTICK.right )
+	{
+		if ( this.body_x_angle < 0.8 )
+		{
+			this.body_x_angle += 0.25 * delta;
+		}
+		this.increase_z( 1.5 * delta );
+	}
+	if ( KMAP[UP_KEY]||JOYSTICK.up )
+	{
+		this.increase_y( 1.5 * delta );
+	}
+	else if ( KMAP[DOWN_KEY]||JOYSTICK.down )
+	{
+		this.increase_y( -1.5 * delta );
+	}
+
+	// if the bird is not turning, fix the body angle
+	if ( !(KMAP[LEFT_KEY]||JOYSTICK.left) && !(KMAP[RIGHT_KEY]||JOYSTICK.right) )
+	{
+		this.fix_body_angle( delta );
+	}
+};
+		/*
+// levels structure:
+var LEVEL01 = {
+	name: '<string key in dictionary>',
+	grid: [a list of list, each list has the arguments of constructor of CubeRow object],
+	bounds: [x, y],
+	particles: [a list of args of ParticleEmitter constructor]
+};
+*/
+var LEVEL_01 = {
+	// the entry in dict
+	name: 'level_01_title',
+	grid: [
+		[0, 0, 10, 1, 100, 2, HORIZONTAL], // down
+		[0, 0, -10, 1, 100, 2, HORIZONTAL], // up
+		[0, 5, 2, 1, 1, 1, HORIZONTAL],
+		[0, 3, -4, 1, 1, 1, HORIZONTAL],
+		[0, 8, -1, 1, 1, 2, HORIZONTAL],
+		[0, -5, -1, 1, 1, 1, HORIZONTAL]
+	],
+	bounds: [8, 30],
+	particles: [
+		{x:20, y:0, z:0, velx:-5, type:PARTICLE_LIGHT, color: 0xE4F1FE}
+	]
+};
+var LEVELS = [
+	LEVEL_01
+];
+
+function set_level( level_index )
+{
+	localStorage.level = level_index;
+}
+function get_level()
+{
+	if ( localStorage.level == null )
+	{
+		set_level( 0 );
+	}
+	return localStorage.level;
+}
+
+function load_level( index )
+{
+	// fixme:
+	//	1. clear CUBE_ROWS
+	//	2. reset bird position
+	//	3. remove the cubes from renderer
+	//	4. load 'items'
+
+	// loading the 'grid'
+	var points_i = LEVELS[ index ].grid.length;
+	var row;
+	var p;
+	while ( points_i-- )
+	{
+		p = LEVELS[ index ].grid[points_i];
+		row = new CubeRow( p[0], p[1], p[2], p[3], p[4], p[5], p[6] );
+		CUBE_ROWS.push(row);
+		row.add_to_scene(scene);
+	}
+	// setting the bounds of level
+	BOUNDS_X = LEVELS[ index ].bounds[0];
+	BOUNDS_Y = LEVELS[ index ].bounds[1];
+	// loading the particles
+	points_i = LEVELS[ index ].particles.length;
+	var particle_emitter;
+	while ( points_i-- )
+	{
+		particle_emitter = new ParticleEmitter( LEVELS[ index ].particles[ points_i ] );
+		particle_emitter.add_to_scene( scene );
+		PARTICLES.push( particle_emitter );
+	}
+}
+		window.onload = function()
+		{
+			DEBUG_DIV = document.getElementById('debug');
+LEVEL_NAME_DIV = document.getElementById('level-name');
+///////////////////////////////////////////////////////////////////////
+JOYSTICK = new JoyStick({
+	radius:80, x: 100,
+	y: window.innerHeight - 100,
+	visible: false,
+	inner_radius: 50
+});
+///////////////////////////////////////////////////////////////////////
+document.body.addEventListener("keyup", function(evt)
+{
+	KMAP[evt.keyCode] = false;
+	if ( KMAP[LEFT_KEY]||KMAP[RIGHT_KEY]||KMAP[UP_KEY]||KMAP[DOWN_KEY] )
+	{
+		evt.preventDefault();
+	}
+}, false);
+document.body.addEventListener("keydown", function(evt)
+{
+	KMAP[evt.keyCode] = true;
+	if ( KMAP[LEFT_KEY]||KMAP[RIGHT_KEY]||KMAP[UP_KEY]||KMAP[DOWN_KEY] )
+	{
+		evt.preventDefault();
+	}
+}, false);
+
+MATERIAL_MESH_SIDED = new THREE.MeshBasicMaterial({color: BIRD_COLOR, side: THREE.DoubleSide});
+CUBE_GEOMETRY = new THREE.BoxBufferGeometry( 1, 1, 1 );
+CUBE_MATERIAL = new THREE.MeshBasicMaterial({ color: CUBE_COLOR, wireframe: false });
+///////////////////////////////////////////////////////////////////////
+scene = new THREE.Scene();
+var aspect = GAME_WIDTH / GAME_HEIGHT;
+var camera = new THREE.PerspectiveCamera( 75, aspect, 0.1, 1000 );
+var clock = new THREE.Clock();
+clock.start();
+// optimized:
+// var renderer = new THREE.WebGLRenderer({ precision: "mediump", devicePixelRatio:1, antialias:false });
+var renderer = new THREE.WebGLRenderer( { antialias : false } );
+renderer.setSize( GAME_WIDTH, GAME_HEIGHT );
+renderer.setClearColor( 0xdddddd ); // rain: dddddd
+scene.fog = new THREE.Fog(renderer.getClearColor(), 0.0, 35);
+//////////////////////////////////////////////
+var loading_manager = new THREE.LoadingManager();
+loading_manager.onProgress = function ( item, loaded, total )
+{
+	// if (loaded == total)
+	// {
+	// 	ASSETS_LOADED = true;
+	// }
+};
+//////////////////////////////////////////////
+
+var audioListener = new THREE.AudioListener();
+camera.add( audioListener );
+var background_music = new THREE.Audio( audioListener );
+scene.add( background_music );
+
+ // fixme: temporary
+document.body.appendChild( renderer.domElement );
+
+if ( is_touch_supported() )
+{
+	var action_button = new JoyStickButton({
+		x: window.innerWidth - 70,
+		y: window.innerHeight - 100,
+		mouse_support:false,
+		radius: 50,
+		func: function() {
+			KMAP[X_KEY] = true;
+		}
+	});
+	action_button.bind('touchend', function(){
+		KMAP[X_KEY] = false;
+	});
+	action_button.bind('mouseup', function(){
+		KMAP[X_KEY] = false;
+	});
+}
+////////////////////////////////////////
+var json_loader = new THREE.JSONLoader( loading_manager );
+	// loading default cube
+	json_loader.load(
+	// resource URL
+	'cube.js',
+	// Function when resource is loaded
+	function ( geometry, materials )
+	{
+		CUBE_ROW_GEOMETRY = geometry;
+		CUBE_ROW_GEOMETRY.computeBoundingBox();
+		CUBE_ROW_SIZE = CUBE_ROW_GEOMETRY.boundingBox.max.x;
+		load_level( get_level() );
+		ASSETS_LOADED = true;
+		show_level_name( _(LEVELS[ get_level() ].name) );
+	}
+);
+
+////////////////////////////////////
+MAIN_BIRD = new Bird();
+MAIN_BIRD.set_y( 3 );
+MAIN_BIRD.add_to_scene( scene );
+var b1 = new Bird();
+b1.set_scale(0.8);
+b1.set_color(0.2,0.2,0.2);
+b1.user_controllable = false;
+b1.state = FLYING;
+b1.set_y(4);
+b1.add_to_scene( scene );
+camera.rotation.y = -1.6;
+camera.position.x = -1.0;
+
+// independent movement
+var delta;
+
+var stats = new Stats();
+stats.showPanel( 0 );
+document.body.appendChild( stats.dom );
+if ( is_touch_supported() )
+{
+	JOYSTICK.__create_fullscreen_div();
+}
+function update_camera()
+{
+	camera.position.y = MAIN_BIRD.get_y() + 0.3;
+	camera.position.z = MAIN_BIRD.get_z();
+}
+var render = function ()
+{
+	requestAnimationFrame( render );
+	stats.begin();
+	delta = clock.getDelta();
+	if ( !ASSETS_LOADED )
+	{
+		return;
+	}
+	renderer.render( scene, camera );
+	////////////////////////////////////////////////
+	var i = CUBE_ROWS.length;
+	var col = false;
+	while ( i-- )
+	{
+		CUBE_ROWS[ i ].increase_x( -5.0 * delta );
+		CUBE_ROWS[ i ].increase_y( 10.0 * delta );
+		if ( CUBE_ROWS[ i ].is_colliding() )
+		{
+			col = true;
+		}
+	}
+	if (col)
+	{
+		CUBE_MATERIAL.color.r = 1.0;
+	}
+	else
+	{
+		CUBE_MATERIAL.color.r = 0.2039;
+	}
+	/////////////////////////////////////////////////
+	i = PARTICLES.length;
+	while ( i-- )
+	{
+		PARTICLES[ i ].update( delta );
+	}
+	/////////////////////////////////////////////////
+	MAIN_BIRD.update( delta );
+	b1.update( delta );
+	update_camera();
+	stats.end();
+};
+
+render();
+
+resize_canvas(renderer.domElement);
+renderer.domElement.style.display = 'table';
+renderer.domElement.style.margin = 'auto';
+renderer.domElement.style.position = 'absolute';
+renderer.domElement.style.top = '0';
+renderer.domElement.style.bottom = '0';
+renderer.domElement.style.left = '0';
+renderer.domElement.style.right = '0';
+		};
+		</script>
+	</head>
+	<body unselectable="on" onselectstart="return false;" onmousedown="return false;">
+		<div id="debug">
+			debug
+		</div>
+		<div id="title-div" style="display: none;" class="title-div">
+			Made&#149;of&#149;Light <br>
+			<a id="settings-button" href="#" class="sub-title">settings</a>
+			<a id="controls-button" href="#" class="sub-title">controls</a>
+			<a id="credits-button" href="#" class="sub-title">credits</a>
+		</div>
+		<style type="text/css">
+		#level-name {
+			opacity: 0.0;
+			transition: opacity 5s;
+		}
+		</style>
+		<div id="level-name" class="title-div">
+			Title goes here
+		</div>
+
+		<style type="text/css">
+
+		.panel {
+	position: absolute;
+	font-family: Aliquam;
+	text-align: center;
+	z-index: 99;
+	font-size: 50px;
+	padding: 15px;
+	background-color: rgba(255,255,255,0.2);
+	border-color: #ffffff;
+	border-style: dashed none dashed none;
+	border-width: 1px;
+	color: black;
+	margin-top: 35vh;
+	width: 100vw;
+	transition: opacity 0.5s;
+	opacity: 0.0;
+	display: none;
+}
+.panel a {
+	text-decoration: none;
+	color: #555;
+}
+hr {
+	border: 0;
+	height: 1px;
+	background: #333;
+	background: -webkit-gradient(linear, left top, right top, color-stop(0%,hsla(0,0%,0%,0)), color-stop(50%,hsla(0,0%,0%,.75)), color-stop(100%,hsla(0,0%,0%,0)));
+	background: -webkit-linear-gradient(left, hsla(0,0%,0%,0) 0%, hsla(0,0%,0%,.75) 50%, hsla(0,0%,0%,0) 100%);
+	background: -moz-linear-gradient(left, hsla(0,0%,0%,0) 0%, hsla(0,0%,0%,.75) 50%, hsla(0,0%,0%,0) 100%);
+	background: -ms-linear-gradient(left, hsla(0,0%,0%,0) 0%, hsla(0,0%,0%,.75) 50%, hsla(0,0%,0%,0) 100%);
+	background: -o-linear-gradient(left, hsla(0,0%,0%,0) 0%, hsla(0,0%,0%,.75) 50%, hsla(0,0%,0%,0) 100%);
+	background: linear-gradient(left, hsla(0,0%,0%,0) 0%, hsla(0,0%,0%,.75) 50%, hsla(0,0%,0%,0) 100%);
+}
+
+		</style>
+		<div id="controls-panel" class="panel">
+			<div>use arrow keys to control the bird</div>
+			<div>&rarr;&uarr;&larr;&darr;</div>
+			<div>use <strong>x</strong> key to spin</div>
+		</div>
+
+		<div id="credits-panel" class="panel">
+			<div>tnks to :</div>
+			<div>
+				shadow
+			</div>
+		</div>
+
+		<div id="settings-panel" class="panel">
+			<div>
+				<div>
+					sound
+					<label class="toggle-checkbox">
+						<input type="checkbox" />
+						<div class="toggle-bg">
+							<div class="toggle-btn"></div>
+						</div>
+					</label>
+				</div>
+
+				<div>
+					antialiaing
+					<label class="toggle-checkbox">
+						<input type="checkbox" />
+						<div class="toggle-bg">
+							<div class="toggle-btn"></div>
+						</div>
+					</label>
+				</div>
+
+				<div>
+					language : <a href="#">portugu&ecirc;s</a> <a style="color: #00aacc" href="#">english</a>
+				</div>
+
+				<br><hr>
+				<div>
+					<a href="#">save</a>
+					<a href="#">cancel</a>
+				</div>
+			</div>
+		</div>
+
+		<script type="text/javascript">
+		document.getElementById("controls-panel").addEventListener("click", function(e){
+			document.getElementById("controls-panel").style.display = 'none';
+			document.getElementById("controls-panel").style.opacity = 0.0;
+			document.getElementById("title-div").style.display = 'block';
+		});
+
+		document.getElementById("credits-panel").addEventListener("click", function(e){
+			document.getElementById("credits-panel").style.display = 'none';
+			document.getElementById("credits-panel").style.opacity = 0.0;
+			document.getElementById("title-div").style.display = 'block';
+		});
+
+		document.getElementById("settings-button").addEventListener("click", function(e){
+			document.getElementById("settings-panel").style.display = 'block';
+			document.getElementById("settings-panel").style.opacity = 0.8;
+			document.getElementById("title-div").style.display = 'none';
+		});
+
+		document.getElementById("controls-button").addEventListener("click", function(e){
+			document.getElementById("controls-panel").style.display = 'block';
+			document.getElementById("controls-panel").style.opacity = 0.8;
+			document.getElementById("title-div").style.display = 'none';
+		});
+		document.getElementById("credits-button").addEventListener("click", function(e){
+			document.getElementById("credits-panel").style.display = 'block';
+			document.getElementById("credits-panel").style.opacity = 0.8;
+			document.getElementById("title-div").style.display = 'none';
+		});
+		</script>
+	</body>
+</html>
